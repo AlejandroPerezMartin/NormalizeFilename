@@ -6,22 +6,26 @@
 # Jan 02, 2014
 ####################################################
 
-### Variables ###
-lowecase=false
-recursive=true
-verbose=false
+##### Variables #####
+areFiles=false
 check=false
+lowecase=false
+isNormalize=true
+recursive=true
+trOptions=""
+verbose=false
+verboseCheck=false
 
-### Functions ###
+##### Functions #####
 error_msg() {
-    echo "normaliza: Missing arguments"
-    echo "normaliza: Syntax: 'normaliza -[OPTIONS] [DIRECTORY] ... [DIRECTORY N]'"
-    echo "normaliza: Run 'normaliza --help' for more options"
+    echo "normalize: Missing arguments"
+    echo "normalize: Syntax: 'normalize -[OPTIONS] [DIRECTORY] ... [DIRECTORY N]'"
+    echo "normalize: Run 'normalize --help' for more options"
     exit 1
 }
 
 show_help() {
-    printf "Usage: normaliza [OPTION] ... [DIRECTORY] ...
+    printf "Usage: normalize [OPTION] ... [DIRECTORY] ...
 
 Displays the N largest files in the specified folder/s.
 
@@ -30,20 +34,18 @@ and 10 largest files are shown.
 
 Mandatory arguments to long options are mandatory for short options too.
 
-   -c, --check       check if file names are normalized or not
-   -h, --help        display this help and exit
-   -l, --lowercase   converts file names to lowercase
-   -u, --uppercase   converts file names to uppercase
-   -w                remove withespaces
-   -s                replace each input sequence of a repeated character that is
-                     listed in SET1 with a single occurrence of that characte
-   -r                recursive renaming (folders too)
-   -t, --type        display results in Megabytes (MB)
-   -v                verbose
+   -c, --check           check if file names are normalized or not
+   -h, --help            display this help and exit
+   -l, --lowercase       converts filenames to lowercase
+   -u, --uppercase       converts filenames to uppercase
+   -r, --recursive       recursive renaming (including folders and subfolder)
+   -v, --verbose         verbosely list files processed
+   -V, --verbose-check   verbosely list files processed in check mode (no changes
+                         are made)
 
 Example of use:
-   normaliza -[r, l, u, w, s, t, v] directory ... directory_n
-   normaliza -[r, l, u, w, s, t, v] directory ... directory_n file ... file_n"
+   normalize -[c, r, l, u, v, V] directory ... directory_n
+   normalize -[c, r, l, u, v, V] directory ... directory_n file ... file_n\n\n"
     exit 0
 }
 
@@ -60,21 +62,51 @@ renameFile(){
     originalFilename="$(dirname "$1")/$(basename "$1")"
     newFilename="$(dirname "$1")/$(basename "$normalizedFilename")"
 
-    [[ "$originalFilename" != "$newFilename" ]] && mv "$originalFilename" "$newFilename"
+    # Need to normalize
+    [[ "$originalFilename" != "$newFilename" ]] && isNormalize=false
+
+    if [[ $isNormalize = false ]]; then
+
+        # Check
+        [[ $check = true ]] && echo "Filename(s) need(s) to be normalized." && removeTempFile && exit 1
+
+        # Verbose check
+        if [[ $verboseCheck = true ]]; then
+            if [[ -d "$originalFilename" ]]; then
+                echo "Directory "\'$originalFilename\'" will be renamed as "\'$newFilename\'""
+            else
+                echo "File "\'$originalFilename\'" will be renamed as "\'$newFilename\'""
+            fi
+        else
+            # Renaming
+            mv "$originalFilename" "$newFilename"
+            # Verbose renaming
+            if [[ $verbose = true ]]; then
+                echo "File "$originalFilename" was renamed as "$newFilename""
+            fi
+        fi
+    fi
 }
 
+removeTempFile(){
+    [[ -f "$temporaryFile" ]] && rm -f "$temporaryFile"
+}
 
+[[ $# -lt 1 ]] && error_msg
 
-### Options ###
-while getopts "ru(uppercase):l(lowercase):h(help)" option
+##### Options #####
+while getopts ":c(check):r(recursive):u(uppercase):l(lowercase):h(help):v(verbose):V(verbose-check)" option
 do
     case $option in
-        h)  show_help ;;
-        r)  recursive=true  ;;
-        l)  lowercase=true  ;;
-        u)  lowercase=false ;;
-        *)  echo "normaliza: invalid option '-$OPTARG'"
-            echo "Try 'normaliza --help' for more information."
+        h)  show_help         ;;
+        c)  check=true        ;;
+        r)  recursive=true    ;;
+        l)  lowercase=true    ;;
+        u)  lowercase=false   ;;
+        v)  verbose=true      ;;
+        V)  verboseCheck=true ;;
+        *)  echo "normalize: invalid option '-$OPTARG'"
+            echo "Try 'normalize --help' for more information."
             return 1 ;;
     esac
 done
@@ -82,29 +114,44 @@ done
 shift $(( OPTIND - 1 ))
 
 
-### Search ###
+##### Search #####
 for file in "$@"; do
+
     if [[ -d "$file" || -f "$file" ]]; then
-        if [[ $recursive=true && -d "$file" ]]; then
+
+        areFiles=true
+
+        if [[ $recursive = true && -d "$file" ]]; then
             temporaryFile="/tmp/temporaryList"
 
-            # Rename regular files
+            # Rename files and folders
             find "$file" -type f > "$temporaryFile"
+            # Invert sort to rename subfolders first
+            find "$file" -type d | sort -r >> "$temporaryFile"
+
             while read line; do
                 renameFile "$line"
             done < "$temporaryFile"
 
-            # Rename folders
-            find "$file" -type d | sort -r > "$temporaryFile"
-            while read line; do
-                renameFile "$line"
-            done < "$temporaryFile"
-
-            rm -f "$temporaryFile"
         else
             renameFile "$file"
         fi
+
     else
-        echo "(ERROR): Filetype not allowed"
+        echo "(ERROR): Filetype not allowed or not exists."
     fi
+
 done
+
+removeTempFile
+
+##### Error message #####
+[[ $areFiles != true ]] && error_msg
+
+# Show message if filenames don't need to be normalized
+if [[ $isNormalize = true ]]; then
+    echo "Filenames are already normalized."
+    exit 0
+fi
+
+exit 0
