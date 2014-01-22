@@ -7,12 +7,11 @@
 ####################################################
 
 ##### Variables #####
-areFiles=false
+thereAreFiles=false
 check=false
 lowecase=false
 isNormalize=true
 recursive=true
-trOptions=""
 verbose=false
 verboseCheck=false
 
@@ -58,33 +57,41 @@ normnalizeFilename(){
 }
 
 renameFile(){
+
     normalizedFilename=$(normnalizeFilename "$(basename "$1")")
     originalFilename="$(dirname "$1")/$(basename "$1")"
     newFilename="$(dirname "$1")/$(basename "$normalizedFilename")"
 
-    # Need to normalize
+    # True if filename needs to be normalized
     [[ "$originalFilename" != "$newFilename" ]] && isNormalize=false
 
+    # If filename is not normalized
     if [[ $isNormalize = false ]]; then
 
-        # Check
+        # Check mode
         [[ $check = true ]] && echo "Filename(s) need(s) to be normalized." && removeTempFile && exit 1
 
-        # Verbose check
+        # Verbose check mode
         if [[ $verboseCheck = true ]]; then
+
             if [[ -d "$originalFilename" ]]; then
                 echo "Directory "\'$originalFilename\'" will be renamed as "\'$newFilename\'""
             else
                 echo "File "\'$originalFilename\'" will be renamed as "\'$newFilename\'""
             fi
+
         else
-            # Renaming
+
+            # Renaming mode
             mv "$originalFilename" "$newFilename"
-            # Verbose renaming
+
+            # Verbose renaming mode
             if [[ $verbose = true ]]; then
                 echo "File "$originalFilename" was renamed as "$newFilename""
             fi
+
         fi
+
     fi
 }
 
@@ -92,18 +99,21 @@ removeTempFile(){
     [[ -f "$temporaryFile" ]] && rm -f "$temporaryFile"
 }
 
+
+# Ensures that at least one parameter is received
 [[ $# -lt 1 ]] && error_msg
+
 
 ##### Options #####
 while getopts ":c(check):r(recursive):u(uppercase):l(lowercase):h(help):v(verbose):V(verbose-check)" option
 do
     case $option in
-        h)  show_help         ;;
-        c)  check=true        ;;
-        r)  recursive=true    ;;
-        l)  lowercase=true    ;;
-        u)  lowercase=false   ;;
-        v)  verbose=true      ;;
+        h)  show_help ;;
+        c)  check=true ;;
+        r)  recursive=true ;;
+        l)  lowercase=true ;;
+        u)  lowercase=false ;;
+        v)  verbose=true ;;
         V)  verboseCheck=true ;;
         *)  echo "normalize: invalid option '-$OPTARG'"
             echo "Try 'normalize --help' for more information."
@@ -119,13 +129,15 @@ for file in "$@"; do
 
     if [[ -d "$file" || -f "$file" ]]; then
 
-        areFiles=true
+        thereAreFiles=true # True if a file or directory is specified as argument
 
         if [[ $recursive = true && -d "$file" ]]; then
+
             temporaryFile="/tmp/temporaryList"
 
             # Rename files and folders
             find "$file" -type f > "$temporaryFile"
+
             # Invert sort to rename subfolders first
             find "$file" -type d | sort -r >> "$temporaryFile"
 
@@ -143,10 +155,11 @@ for file in "$@"; do
 
 done
 
+# Removes temporary file if it was created
 removeTempFile
 
-##### Error message #####
-[[ $areFiles != true ]] && error_msg
+# Error message if no files or directories are specified as arguments
+[[ $thereAreFiles != true ]] && error_msg
 
 # Show message if filenames don't need to be normalized
 if [[ $isNormalize = true ]]; then
